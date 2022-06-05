@@ -1,0 +1,109 @@
+version: '3'
+
+services:
+  gateway:
+    image: ait0ne666/notes-gateway:1.0.0
+    ports:
+      - "3000:3000"
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  auth-service:
+    image: ait0ne666/notes-auth-service:1.0.0
+    ports:
+      - "5000:5000"
+    deploy:
+      mode: replicated
+      replicas: 1
+  
+  notes-service:
+    image: ait0ne666/notes-notes-service:1.0.0
+    ports:
+      - "5001:5001"
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  mail-service:
+    image: ait0ne666/notes-mail-service:1.0.0
+    ports:
+      - "5002:5002"
+    deploy:
+      mode: replicated
+      replicas: 1
+      
+  listener-service:
+    image: ait0ne666/notes-listener-service:1.0.0
+    deploy:
+      mode: replicated
+      replicas: 1
+
+  postgres:
+    image: 'postgres:14.2'
+    ports:
+      - "5432:5432"
+    deploy:
+      mode: replicated
+      replicas: 1
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: fibonachi
+      POSTGRES_DB: notes
+    volumes:
+      - ./db-data/postgres/:/var/lib/postgresql/data/
+
+  postgres_notes:
+    image: 'postgres:14.2'
+    ports:
+      - "5433:5432"
+    deploy:
+      mode: replicated
+      replicas: 1
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: fibonachi
+      POSTGRES_DB: notes
+    volumes:
+      - ./db-data/postgres_notes/:/var/lib/postgresql/data/
+  
+  
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    depends_on:
+      - zookeeper
+    ports:
+      - '9092:9092'
+    expose:
+      - '29092'
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+      KAFKA_MIN_INSYNC_REPLICAS: '1'
+
+  init-kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    depends_on:
+      - kafka
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      kafka-topics --bootstrap-server kafka:29092 --list
+
+      echo -e 'Creating kafka topics'
+      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic mail --replication-factor 1 --partitions 1
+
+      echo -e 'Successfully created the following topics:'
+      kafka-topics --bootstrap-server kafka:29092 --list
+      "
